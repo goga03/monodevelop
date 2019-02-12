@@ -639,8 +639,11 @@ namespace MonoDevelop.VersionControl.Git
 						if (credType == GitCredentialsType.Tfs) {
 							retry = true;
 							tfsSession.Dispose ();
-							onRetry?.Invoke ();
-							continue;
+
+							if (onRetry != null) {
+								onRetry.Invoke ();
+								continue;
+							}
 						}
 
 						string message;
@@ -664,12 +667,18 @@ namespace MonoDevelop.VersionControl.Git
 		{
 			monitor.BeginTask (GettextCatalog.GetString ("Fetching"), 1);
 			monitor.Log.WriteLine (GettextCatalog.GetString ("Fetching from '{0}'", remote));
-			int progress = 0;
-			RetryUntilSuccess (monitor, credType => RootRepository.Fetch (remote, new FetchOptions {
-				CredentialsProvider = (url, userFromUrl, types) => GitCredentials.TryGet (url, userFromUrl, types, credType),
-				OnTransferProgress = tp => OnTransferProgress (tp, monitor, ref progress),
-			}));
-			monitor.Step (1);
+
+			try {
+				int progress = 0;
+				RetryUntilSuccess (monitor, credType => RootRepository.Fetch (remote, new FetchOptions {
+					CredentialsProvider = (url, userFromUrl, types) => GitCredentials.TryGet (url, userFromUrl, types, credType),
+					OnTransferProgress = tp => OnTransferProgress (tp, monitor, ref progress),
+				}));
+				monitor.Step (1);
+			} catch (VersionControlException vcex) {
+				monitor.ReportError (vcex.Message, null);
+			}
+
 			monitor.EndTask ();
 		}
 
